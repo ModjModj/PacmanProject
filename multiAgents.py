@@ -286,6 +286,60 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
           legal moves.
         """
         "*** YOUR CODE HERE ***"
+        agentIndex = self.index  # should be 0
+        bestScore = -float('inf')
+        bestAction = None
+ 
+        # prefer moving over stopping unless trapped
+        actions = [a for a in gameState.getLegalActions(agentIndex)
+                   if a != Directions.STOP]
+        if not actions:
+            actions = gameState.getLegalActions(agentIndex)
+ 
+        for action in actions:
+            successor = gameState.generateSuccessor(agentIndex, action)
+            score = self.value(successor, agentIndex + 1, self.depth)
+            if score > bestScore:
+                bestScore = score
+                bestAction = action
+ 
+        return bestAction if bestAction is not None else Directions.STOP
+ 
+    def value(self, gameState, agentIndex, depth):
+        if agentIndex == gameState.getNumAgents():
+            agentIndex = 0
+            depth -= 1
+        if depth == 0 or gameState.isWin() or gameState.isLose():
+            return self.evaluationFunction(gameState)
+        if agentIndex == 0:
+            return self.maxValue(gameState, agentIndex, depth)
+        else:
+            return self.expValue(gameState, agentIndex, depth)
+ 
+    def maxValue(self, gameState, agentIndex, depth):
+        maxScore = -float('inf')
+        for action in gameState.getLegalActions(agentIndex):
+            successor = gameState.generateSuccessor(agentIndex, action)
+            score = self.value(successor, agentIndex + 1, depth)
+            if score > maxScore:
+                maxScore = score
+        return maxScore
+ 
+    def expValue(self, gameState, agentIndex, depth):
+        """
+        Returns the expected (average) value over all legal ghost actions,
+        modelling each ghost as choosing uniformly at random.
+        """
+        actions = gameState.getLegalActions(agentIndex)
+        if not actions:
+            return self.evaluationFunction(gameState)
+ 
+        total = 0.0
+        prob = 1.0 / len(actions)  # uniform distribution
+        for action in actions:
+            successor = gameState.generateSuccessor(agentIndex, action)
+            total += prob * self.value(successor, agentIndex + 1, depth)
+        return total
         util.raiseNotDefined()
 
 def betterEvaluationFunction(currentGameState):
@@ -296,8 +350,46 @@ def betterEvaluationFunction(currentGameState):
       DESCRIPTION: <write something here so we know what you did>
     """
     "*** YOUR CODE HERE ***"
+    pos = currentGameState.getPacmanPosition()
+    foodList = currentGameState.getFood().asList()
+    ghostStates = currentGameState.getGhostStates()
+    capsules = currentGameState.getCapsules()
+ 
+    # --- Base score ---
+    score = currentGameState.getScore()
+ 
+    # --- Closest food reward ---
+    if foodList:
+        minFoodDist = min(manhattanDistance(pos, food) for food in foodList)
+        score += 1.0 / (minFoodDist + 1) * 10
+    
+    # --- Penalty for food remaining ---
+    score -= len(foodList) * 4
+ 
+    # --- Ghost interactions ---
+    for ghostState in ghostStates:
+        ghostPos = ghostState.getPosition()
+        dist = manhattanDistance(pos, ghostPos)
+        if ghostState.scaredTimer > 0:
+            # Scared ghost: reward proximity (chase it!)
+            score += 1.0 / (dist + 1) * 20
+        else:
+            # Active ghost: heavy penalty when close
+            if dist < 2:
+                score -= 500
+            elif dist < 4:
+                score -= 50
+            else:
+                score -= 1.0 / (dist + 1) * 5
+ 
+    # --- Capsule penalty (fewer remaining is better) ---
+    score -= len(capsules) * 8
+ 
+    return score
     util.raiseNotDefined()
 
+# Abbreviation
+better = betterEvaluationFunction
 # Abbreviation
 better = betterEvaluationFunction
 
